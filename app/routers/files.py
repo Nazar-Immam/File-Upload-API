@@ -1,8 +1,11 @@
-from fastapi import APIRouter , UploadFile , File , HTTPException , status , Depends
+from fastapi import APIRouter , UploadFile , File , HTTPException , status , Depends 
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from ..config import MAX_FILE_SIZE , ALLOWED_CONTENT_TYPES
 from app.services.file_service import generate_unique_filename , save_file_to_disk
 from app import schemas , models , database
+import os
+
 
 router = APIRouter(
     prefix="/files",
@@ -45,3 +48,21 @@ async def upload_file(file: UploadFile = File(...) , db : Session = Depends(data
     db.refresh(new_file)
 
     return new_file
+
+
+
+@router.get("/download/{file_id}")
+def download_file(file_id: int, db: Session = Depends(database.get_db)):
+    file = db.query(models.File).filter(models.File.id == file_id).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not os.path.exists(file.file_path):
+        raise HTTPException(status_code=404, detail="File missing on server")
+
+    return FileResponse(
+        path=file.file_path,
+        filename=file.original_name,
+        media_type=file.content_type
+    )
